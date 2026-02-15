@@ -1,0 +1,959 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLOCKCHAIN VISUALIZER</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<style>
+  :root {
+    --bg: #050a0e;
+    --surface: #0a1520;
+    --surface2: #0f1e2e;
+    --border: #0d3a5c;
+    --cyan: #00e5ff;
+    --cyan-dim: #007a8c;
+    --green: #00ff9d;
+    --green-dim: #007a4d;
+    --red: #ff2d55;
+    --red-dim: #7a0020;
+    --yellow: #ffd600;
+    --text: #c9e8f5;
+    --text-dim: #4a7a99;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Orbitron', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Scanlines overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 229, 255, 0.015) 2px,
+      rgba(0, 229, 255, 0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Grid background */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0, 229, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 229, 255, 0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    text-align: center;
+    padding: 30px 0 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 28px;
+    position: relative;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 1px;
+    background: var(--cyan);
+    box-shadow: 0 0 20px var(--cyan);
+  }
+  .header-title {
+    font-family: var(--display);
+    font-size: clamp(22px, 4vw, 42px);
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    color: var(--cyan);
+    text-shadow: 0 0 30px rgba(0,229,255,0.6), 0 0 60px rgba(0,229,255,0.3);
+    animation: flicker 8s infinite;
+  }
+  .header-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.3em;
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+
+  @keyframes flicker {
+    0%, 95%, 100% { opacity: 1; }
+    96% { opacity: 0.85; }
+    97% { opacity: 1; }
+    98% { opacity: 0.9; }
+  }
+
+  /* ── CONTROL PANEL ── */
+  .control-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--cyan-dim);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-end;
+    position: relative;
+  }
+  .control-panel::before {
+    content: 'CONTROL PANEL';
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    background: var(--bg);
+    padding: 0 8px;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--cyan-dim);
+    font-family: var(--display);
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 180px;
+  }
+  .control-group label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .control-group input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+  }
+  .control-group input[type="text"]:focus {
+    border-color: var(--cyan);
+    box-shadow: 0 0 12px rgba(0,229,255,0.2), inset 0 0 8px rgba(0,229,255,0.05);
+  }
+
+  .difficulty-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .difficulty-group label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .diff-buttons {
+    display: flex;
+    gap: 6px;
+  }
+  .diff-btn {
+    width: 42px; height: 42px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .diff-btn:hover { border-color: var(--cyan-dim); color: var(--cyan); }
+  .diff-btn.active {
+    background: rgba(0,229,255,0.1);
+    border-color: var(--cyan);
+    color: var(--cyan);
+    box-shadow: 0 0 12px rgba(0,229,255,0.25);
+  }
+
+  .btn {
+    padding: 11px 24px;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+    text-transform: uppercase;
+    white-space: nowrap;
+    align-self: flex-end;
+  }
+  .btn-mine {
+    background: var(--cyan);
+    color: var(--bg);
+    box-shadow: 0 0 20px rgba(0,229,255,0.3);
+  }
+  .btn-mine:hover:not(:disabled) {
+    background: #fff;
+    box-shadow: 0 0 30px rgba(0,229,255,0.6);
+  }
+  .btn-mine:disabled {
+    background: var(--cyan-dim);
+    cursor: not-allowed;
+    opacity: 0.6;
+    box-shadow: none;
+  }
+  .btn-auto {
+    background: transparent;
+    border: 1px solid var(--yellow);
+    color: var(--yellow);
+  }
+  .btn-auto:hover { background: rgba(255,214,0,0.1); box-shadow: 0 0 15px rgba(255,214,0,0.2); }
+
+  /* ── STATUS BAR ── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .validity-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 24px;
+    border: 1px solid;
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    transition: all 0.3s;
+    flex: 0 0 auto;
+  }
+  .validity-badge.valid {
+    border-color: var(--green);
+    color: var(--green);
+    background: rgba(0,255,157,0.07);
+    box-shadow: 0 0 20px rgba(0,255,157,0.2);
+  }
+  .validity-badge.invalid {
+    border-color: var(--red);
+    color: var(--red);
+    background: rgba(255,45,85,0.07);
+    box-shadow: 0 0 20px rgba(255,45,85,0.2);
+    animation: shake 0.3s ease;
+  }
+  .badge-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    animation: pulse-dot 1.5s infinite;
+  }
+  .valid .badge-dot { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .invalid .badge-dot { background: var(--red); box-shadow: 0 0 10px var(--red); }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+
+  .status-info {
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .status-info span { color: var(--cyan); }
+
+  .mining-status {
+    font-size: 12px;
+    color: var(--yellow);
+    letter-spacing: 0.1em;
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .mining-status.visible { display: flex; }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid transparent;
+    border-top-color: var(--yellow);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── BLOCKCHAIN DISPLAY ── */
+  .chain-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  .chain-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    animation: slideIn 0.5s ease forwards;
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  @keyframes slideIn {
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* connector line */
+  .chain-connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 20px;
+    position: relative;
+  }
+  .chain-connector::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 50%;
+    width: 2px;
+    background: linear-gradient(to bottom, transparent, var(--cyan-dim), transparent);
+  }
+  .connector-label {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    z-index: 1;
+    white-space: nowrap;
+  }
+
+  .block-card {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--cyan-dim);
+    padding: 20px;
+    position: relative;
+    transition: all 0.3s;
+    overflow: hidden;
+  }
+  .block-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
+  }
+  .block-card.genesis { border-left-color: var(--yellow); }
+  .block-card.genesis::before {
+    background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+  }
+  .block-card.tampered {
+    border-left-color: var(--red) !important;
+    border-color: var(--red) !important;
+    background: rgba(255,45,85,0.05);
+    box-shadow: 0 0 20px rgba(255,45,85,0.2), inset 0 0 20px rgba(255,45,85,0.05);
+  }
+  .block-card.tampered::before {
+    background: linear-gradient(90deg, transparent, var(--red), transparent);
+  }
+  .block-card.mining {
+    border-left-color: var(--yellow);
+    animation: miningPulse 0.8s infinite alternate;
+  }
+  @keyframes miningPulse {
+    from { box-shadow: 0 0 10px rgba(255,214,0,0.1); }
+    to { box-shadow: 0 0 30px rgba(255,214,0,0.4), inset 0 0 15px rgba(255,214,0,0.08); }
+  }
+
+  .block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .block-number {
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--cyan);
+  }
+  .block-number .genesis-tag {
+    color: var(--yellow);
+  }
+  .block-time {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .block-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field.wide { grid-column: 1 / -1; }
+  .field-label {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .field-value {
+    font-size: 12px;
+    color: var(--text);
+    word-break: break-all;
+    line-height: 1.4;
+  }
+  .field-value.hash { color: var(--cyan); font-size: 11px; }
+  .field-value.prev-hash { color: var(--cyan-dim); font-size: 11px; }
+  .field-value.nonce { color: var(--yellow); }
+  .field-value.data { color: #e0f5ff; }
+
+  .hash-match-indicator {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .hash-match-indicator.match { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .hash-match-indicator.no-match { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+  .block-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .btn-small {
+    padding: 5px 12px;
+    font-family: var(--display);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    border: 1px solid;
+    background: transparent;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  .btn-edit { border-color: var(--text-dim); color: var(--text-dim); }
+  .btn-edit:hover { border-color: var(--yellow); color: var(--yellow); background: rgba(255,214,0,0.05); }
+  .btn-save { border-color: var(--green); color: var(--green); }
+  .btn-save:hover { background: rgba(0,255,157,0.08); }
+  .btn-cancel { border-color: var(--text-dim); color: var(--text-dim); }
+  .btn-cancel:hover { border-color: var(--red); color: var(--red); background: rgba(255,45,85,0.05); }
+
+  .edit-input {
+    background: var(--bg);
+    border: 1px solid var(--yellow);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    width: 100%;
+    outline: none;
+    box-shadow: 0 0 10px rgba(255,214,0,0.15);
+  }
+
+  /* ── LEDGER ── */
+  .ledger {
+    margin-top: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--green-dim);
+    padding: 20px 24px;
+    position: relative;
+  }
+  .ledger::before {
+    content: 'TRANSACTION LEDGER';
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    background: var(--bg);
+    padding: 0 8px;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--green-dim);
+    font-family: var(--display);
+  }
+  .ledger-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .ledger-list::-webkit-scrollbar { width: 4px; }
+  .ledger-list::-webkit-scrollbar-track { background: var(--bg); }
+  .ledger-list::-webkit-scrollbar-thumb { background: var(--border); }
+  .ledger-entry {
+    font-size: 12px;
+    display: flex;
+    gap: 16px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(13,58,92,0.5);
+  }
+  .ledger-block-num { color: var(--cyan); min-width: 60px; font-family: var(--display); font-size: 10px; }
+  .ledger-data { color: var(--text); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 700px) {
+    .block-fields { grid-template-columns: 1fr; }
+    .status-bar { flex-direction: column; align-items: flex-start; }
+    .control-panel { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <div class="header-title">⬡ BLOCKCHAIN VISUALIZER</div>
+    <div class="header-sub">Proof-of-Work · SHA-256 · Distributed Ledger Simulation</div>
+  </header>
+
+  <!-- CONTROL PANEL -->
+  <div class="control-panel">
+    <div class="control-group" style="flex:2; min-width:240px;">
+      <label>Block Data / Transaction</label>
+      <input type="text" id="blockData" placeholder="e.g. Alice pays Bob 10 BTC" />
+    </div>
+    <div class="difficulty-group">
+      <label>Mining Difficulty</label>
+      <div class="diff-buttons">
+        <button class="diff-btn" data-diff="1">1</button>
+        <button class="diff-btn active" data-diff="2">2</button>
+        <button class="diff-btn" data-diff="3">3</button>
+        <button class="diff-btn" data-diff="4">4</button>
+      </div>
+    </div>
+    <button class="btn btn-mine" id="mineBtn" onclick="mineBlock()">⛏ Mine Block</button>
+    <button class="btn btn-auto" onclick="autoMine()">⚡ Auto-Mine ×5</button>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <div class="validity-badge valid" id="validityBadge">
+      <div class="badge-dot"></div>
+      <span id="validityText">CHAIN VALID</span>
+    </div>
+    <div class="status-info">
+      Blocks: <span id="blockCount">1</span> &nbsp;|&nbsp;
+      Difficulty: <span id="diffDisplay">2</span> &nbsp;|&nbsp;
+      Target: <span id="targetDisplay">00...</span>
+    </div>
+    <div class="mining-status" id="miningStatus">
+      <div class="spinner"></div>
+      <span id="miningStatusText">Mining block...</span>
+    </div>
+  </div>
+
+  <!-- BLOCKCHAIN -->
+  <div class="chain-container" id="chainContainer"></div>
+
+  <!-- LEDGER -->
+  <div class="ledger">
+    <ul class="ledger-list" id="ledgerList"></ul>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  BLOCKCHAIN LOGIC
+// ══════════════════════════════════════════════
+
+class Block {
+  constructor(index, timestamp, data, previousHash = '') {
+    this.index = index;
+    this.timestamp = timestamp;
+    this.data = data;
+    this.previousHash = previousHash;
+    this.nonce = 0;
+    this.hash = this.calculateHash();
+  }
+  calculateHash() {
+    return CryptoJS.SHA256(
+      this.index + this.previousHash + this.timestamp + this.data + this.nonce
+    ).toString();
+  }
+  mineBlock(difficulty) {
+    const target = '0'.repeat(difficulty);
+    while (this.hash.substring(0, difficulty) !== target) {
+      this.nonce++;
+      this.hash = this.calculateHash();
+    }
+  }
+}
+
+class Blockchain {
+  constructor() {
+    this.difficulty = 2;
+    this.chain = [this.createGenesisBlock()];
+  }
+  createGenesisBlock() {
+    const b = new Block(0, Date.now(), 'Genesis Block', '0000000000');
+    b.mineBlock(this.difficulty);
+    return b;
+  }
+  getLatestBlock() { return this.chain[this.chain.length - 1]; }
+  addBlock(data) {
+    const b = new Block(this.chain.length, Date.now(), data, this.getLatestBlock().hash);
+    b.mineBlock(this.difficulty);
+    this.chain.push(b);
+    return b;
+  }
+  isChainValid() {
+    for (let i = 1; i < this.chain.length; i++) {
+      const cur = this.chain[i];
+      const prev = this.chain[i - 1];
+      if (cur.hash !== cur.calculateHash()) return false;
+      if (cur.previousHash !== prev.hash) return false;
+    }
+    return true;
+  }
+}
+
+// ══════════════════════════════════════════════
+//  APP STATE
+// ══════════════════════════════════════════════
+
+const bc = new Blockchain();
+let isMining = false;
+
+// ══════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════
+
+function fmt(hash) {
+  return hash ? hash.substring(0, 12) + '...' : '—';
+}
+function fmtFull(hash) {
+  return hash ? hash.substring(0, 20) + '...' : '—';
+}
+function fmtTime(ts) {
+  return new Date(ts).toLocaleTimeString();
+}
+
+function renderChain() {
+  const container = document.getElementById('chainContainer');
+  container.innerHTML = '';
+
+  bc.chain.forEach((block, i) => {
+    const prevBlock = bc.chain[i - 1];
+    const isValid = block.hash === block.calculateHash();
+    const isLinked = i === 0 || block.previousHash === prevBlock.hash;
+    const isTampered = !isValid || !isLinked;
+
+    // Connector (not for genesis)
+    if (i > 0) {
+      const connRow = document.createElement('div');
+      connRow.style.display = 'flex';
+      connRow.style.justifyContent = 'center';
+      connRow.style.padding = '2px 0';
+      connRow.innerHTML = `
+        <div style="width:2px; background: ${isTampered ? 'var(--red)' : 'var(--cyan-dim)'}; 
+             min-height: 24px; box-shadow: 0 0 8px ${isTampered ? 'rgba(255,45,85,0.4)' : 'rgba(0,229,255,0.2)'};">
+        </div>
+      `;
+      container.appendChild(connRow);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'chain-row';
+    row.style.animationDelay = (i * 0.06) + 's';
+
+    const card = document.createElement('div');
+    card.className = `block-card ${i === 0 ? 'genesis' : ''} ${isTampered ? 'tampered' : ''}`;
+    card.id = `block-${i}`;
+
+    const hashMatchIndicator = i === 0 ? '' :
+      `<span class="hash-match-indicator ${isLinked ? 'match' : 'no-match'}" title="${isLinked ? 'Hash chain intact' : 'Hash mismatch — chain broken'}"></span>`;
+
+    card.innerHTML = `
+      <div class="block-header">
+        <div class="block-number">${i === 0 ? '<span class="genesis-tag">⬡ GENESIS</span>' : `BLOCK #${block.index}`}</div>
+        <div class="block-time">${fmtTime(block.timestamp)}</div>
+      </div>
+      <div class="block-fields">
+        <div class="field wide">
+          <div class="field-label">Data / Transaction</div>
+          <div class="field-value data" id="data-display-${i}">${escapeHtml(block.data)}</div>
+          <input class="edit-input" id="data-edit-${i}" value="${escapeHtml(block.data)}" 
+                 style="display:none;" onkeydown="if(event.key==='Enter') saveEdit(${i})">
+        </div>
+        <div class="field">
+          <div class="field-label">Nonce</div>
+          <div class="field-value nonce">${block.nonce.toLocaleString()}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">#${block.index} Hash</div>
+          <div class="field-value hash" title="${block.hash}">${fmt(block.hash)}</div>
+        </div>
+        <div class="field wide">
+          <div class="field-label">Previous Hash ${hashMatchIndicator}</div>
+          <div class="field-value prev-hash" title="${block.previousHash}">${fmt(block.previousHash)}</div>
+        </div>
+      </div>
+      <div class="block-actions" id="actions-${i}">
+        <button class="btn-small btn-edit" onclick="startEdit(${i})">✎ Edit</button>
+        ${isTampered ? `<span style="font-size:10px;color:var(--red);letter-spacing:0.1em;align-self:center;">⚠ TAMPERED — hash mismatch</span>` : ''}
+      </div>
+    `;
+
+    row.appendChild(card);
+    container.appendChild(row);
+  });
+
+  updateValidity();
+  renderLedger();
+}
+
+function updateValidity() {
+  const valid = bc.isChainValid();
+  const badge = document.getElementById('validityBadge');
+  const text = document.getElementById('validityText');
+  badge.className = `validity-badge ${valid ? 'valid' : 'invalid'}`;
+  text.textContent = valid ? '✓ CHAIN VALID' : '✗ CHAIN INVALID';
+  document.getElementById('blockCount').textContent = bc.chain.length;
+}
+
+function renderLedger() {
+  const list = document.getElementById('ledgerList');
+  list.innerHTML = bc.chain.map(b => `
+    <li class="ledger-entry">
+      <span class="ledger-block-num">BLK #${b.index}</span>
+      <span class="ledger-data">${escapeHtml(b.data)}</span>
+    </li>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ══════════════════════════════════════════════
+//  MINING
+// ══════════════════════════════════════════════
+
+async function mineBlock() {
+  if (isMining) return;
+  const input = document.getElementById('blockData');
+  const data = input.value.trim() || `Tx-${Date.now()}`;
+
+  isMining = true;
+  document.getElementById('mineBtn').disabled = true;
+
+  const statusEl = document.getElementById('miningStatus');
+  const statusText = document.getElementById('miningStatusText');
+  statusEl.classList.add('visible');
+  statusText.textContent = `Mining block #${bc.chain.length}...`;
+
+  // Add placeholder card with mining animation
+  addMiningPlaceholder();
+
+  const t0 = performance.now();
+  await new Promise(resolve => setTimeout(resolve, 10)); // yield to render
+
+  // Mine in chunks to avoid freezing UI
+  const difficulty = bc.difficulty;
+  const target = '0'.repeat(difficulty);
+  const prev = bc.getLatestBlock();
+  const index = bc.chain.length;
+  const timestamp = Date.now();
+  const block = new Block(index, timestamp, data, prev.hash);
+
+  await mineAsync(block, difficulty, target, statusText);
+
+  const elapsed = Math.round(performance.now() - t0);
+
+  bc.chain.push(block);
+  input.value = '';
+  isMining = false;
+  document.getElementById('mineBtn').disabled = false;
+  statusEl.classList.remove('visible');
+  statusText.textContent = `Mined in ${elapsed}ms`;
+
+  renderChain();
+
+  // Flash the new block
+  setTimeout(() => {
+    const newCard = document.getElementById(`block-${block.index}`);
+    if (newCard) {
+      newCard.style.boxShadow = '0 0 40px rgba(0,229,255,0.5)';
+      setTimeout(() => newCard.style.boxShadow = '', 800);
+    }
+  }, 100);
+
+  // Show mine time briefly
+  statusEl.classList.add('visible');
+  statusText.textContent = `✓ Block #${block.index} mined in ${elapsed}ms (nonce: ${block.nonce.toLocaleString()})`;
+  setTimeout(() => statusEl.classList.remove('visible'), 3000);
+}
+
+function mineAsync(block, difficulty, target, statusText) {
+  return new Promise(resolve => {
+    const CHUNK = 5000;
+    function chunk() {
+      for (let i = 0; i < CHUNK; i++) {
+        if (block.hash.substring(0, difficulty) === target) { resolve(); return; }
+        block.nonce++;
+        block.hash = block.calculateHash();
+      }
+      statusText.textContent = `Mining block #${block.index}... nonce: ${block.nonce.toLocaleString()}`;
+      setTimeout(chunk, 0);
+    }
+    chunk();
+  });
+}
+
+function addMiningPlaceholder() {
+  const container = document.getElementById('chainContainer');
+  const connDiv = document.createElement('div');
+  connDiv.id = 'mining-connector';
+  connDiv.style.cssText = 'display:flex;justify-content:center;padding:2px 0;';
+  connDiv.innerHTML = `<div style="width:2px;min-height:24px;background:var(--yellow);box-shadow:0 0 8px rgba(255,214,0,0.4);"></div>`;
+  container.appendChild(connDiv);
+
+  const row = document.createElement('div');
+  row.id = 'mining-placeholder';
+  row.className = 'chain-row';
+  row.style.opacity = '1';
+  row.innerHTML = `
+    <div class="block-card mining" style="min-height:120px;display:flex;align-items:center;justify-content:center;gap:16px;">
+      <div class="spinner" style="width:20px;height:20px;border-top-color:var(--yellow);"></div>
+      <span style="font-family:var(--display);font-size:12px;color:var(--yellow);letter-spacing:0.12em;">MINING BLOCK #${bc.chain.length}...</span>
+    </div>
+  `;
+  container.appendChild(row);
+}
+
+// ══════════════════════════════════════════════
+//  AUTO-MINE
+// ══════════════════════════════════════════════
+
+const autoTransactions = [
+  'Alice → Bob: 5 BTC', 'Bob → Carol: 2.5 BTC', 'Carol → Dave: 1.2 ETH',
+  'Eve → Frank: 100 USDC', 'Grace → Heidi: 0.75 BTC', 'Ivan → Judy: 50 SOL',
+  'Kevin → Liam: 3 ETH', 'Mia → Noah: 200 ADA', 'Olivia → Pete: 0.1 BTC',
+];
+let autoIdx = 0;
+
+async function autoMine() {
+  if (isMining) return;
+  for (let i = 0; i < 5; i++) {
+    document.getElementById('blockData').value = autoTransactions[autoIdx % autoTransactions.length];
+    autoIdx++;
+    await mineBlock();
+    await new Promise(r => setTimeout(r, 200));
+  }
+}
+
+// ══════════════════════════════════════════════
+//  TAMPER / EDIT
+// ══════════════════════════════════════════════
+
+function startEdit(i) {
+  document.getElementById(`data-display-${i}`).style.display = 'none';
+  document.getElementById(`data-edit-${i}`).style.display = 'block';
+  document.getElementById(`data-edit-${i}`).focus();
+  document.getElementById(`actions-${i}`).innerHTML = `
+    <button class="btn-small btn-save" onclick="saveEdit(${i})">✓ Save</button>
+    <button class="btn-small btn-cancel" onclick="cancelEdit(${i})">✕ Cancel</button>
+  `;
+}
+
+function saveEdit(i) {
+  const newData = document.getElementById(`data-edit-${i}`).value;
+  bc.chain[i].data = newData;
+  // Recalculate hash WITHOUT re-mining = tamper
+  bc.chain[i].hash = bc.chain[i].calculateHash();
+  renderChain();
+}
+
+function cancelEdit(i) {
+  renderChain();
+}
+
+// ══════════════════════════════════════════════
+//  DIFFICULTY SELECTOR
+// ══════════════════════════════════════════════
+
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const d = parseInt(btn.dataset.diff);
+    bc.difficulty = d;
+    document.getElementById('diffDisplay').textContent = d;
+    document.getElementById('targetDisplay').textContent = '0'.repeat(d) + '...';
+  });
+});
+
+// Enter key to mine
+document.getElementById('blockData').addEventListener('keydown', e => {
+  if (e.key === 'Enter') mineBlock();
+});
+
+// ══════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════
+document.getElementById('diffDisplay').textContent = bc.difficulty;
+document.getElementById('targetDisplay').textContent = '0'.repeat(bc.difficulty) + '...';
+renderChain();
+</script>
+</body>
+</html>
